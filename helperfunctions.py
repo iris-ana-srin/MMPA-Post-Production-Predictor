@@ -76,7 +76,8 @@ def computeProcessMetrics(df):
                 end = prog["Timestamp"].max()
                 dur = (end - start).total_seconds() / 60
             else:
-                start = end = dur = None
+                start = end = pd.NaT
+                dur = np.nan
             row[f"{name}_DurMin"] = dur
             row[f"{name}_End"] = end
 
@@ -105,10 +106,8 @@ def computeProcessMetrics(df):
 def computeTotals(ufdf, proddf):
     ufdf["Timestamp"] = pd.to_datetime(ufdf["Timestamp"])
     out = []
-
     for _, r in proddf.iterrows():
         mask = ((ufdf["Timestamp"] >= r["production_start_ts"]) & (ufdf["Timestamp"] <= r["production_end_ts"]))
-
         run_uf = ufdf.loc[mask].sort_values("Timestamp")
         if len(run_uf) < 2 or not r["duration_hr"]:
             out.append({
@@ -118,7 +117,6 @@ def computeTotals(ufdf, proddf):
                             "max_lbs_per_hr": None
                         })
             continue
-
         dt_hr = run_uf["Timestamp"].diff().dt.total_seconds() / 3600
         diff = run_uf["MAIN_TOTAL"].diff()
         pos = diff[(diff > 0) & (dt_hr > 0)]
@@ -191,17 +189,15 @@ def computeStageAggregates(run_df):
     return out
 
 
-def computeCleaningHistory(current_run, progsummarydf):
-    prev = progsummarydf[progsummarydf["RunId"] < current_run["RunId"]]
+def computeCleaningHistory(current_run, progsummarydf, chkprevdur):
+    prev = progsummarydf[progsummarydf["RunId"] < current_run["RunId"]] 
     if prev.empty:
         return {}
-    last = prev.sort_values("RunId").iloc[-1]
+    last = prev.iloc[-1] if not pd.isna(chkprevdur) else prev.iloc[-2]
 
     out = {}
-    clean_cols = ["CIP_DurMin", "Short_CIP_DurMin",
-                  "Soak_DurMin", "Sanitize_DurMin",
-                  "Rinse_DurMin"]
-
+    clean_cols = ["CIP_DurMin", "Short_CIP_DurMin", "Soak_DurMin", "Sanitize_DurMin", "Rinse_DurMin"]
+    
     # --Total cleaning time--
     clean_vals = (last[clean_cols].apply(pd.to_numeric, errors="coerce").fillna(0))
     for col in clean_cols:
@@ -220,6 +216,6 @@ def computeCleaningHistory(current_run, progsummarydf):
     if not last_full.empty:
         last_cip_end = last_full.iloc[-1]["CIP_End"]
         if pd.notna(last_cip_end):
-            out["time_since_last_full_CIP"] = ((current_run["production_start_ts"] - last_cip_end).total_seconds() / 3600)
+            out["time_since_last_full_CIP"] = ((current_run["production_end_ts"] - last_cip_end).total_seconds() / 3600)
 
     return out

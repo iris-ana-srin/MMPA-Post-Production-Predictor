@@ -18,8 +18,8 @@ class DataEngineer:
 
         final_rows = []
 
-        for _, run in runs_df.iterrows():
-            if last_ts is not None and run["production_start_ts"] <= last_ts:
+        for i, run in runs_df.iterrows():
+            if pd.notna(last_ts) and run["production_start_ts"] < last_ts:
                 continue
             row = run.to_dict()
 
@@ -50,11 +50,11 @@ class DataEngineer:
                     row[name] = _safe_slope(pro_slice[col], pro_slice["Timestamp"])
 
             # --Cleaning History--
-            row.update(computeCleaningHistory(run, progsummarydf))
+            prev_duration = runs_df.iloc[i - 1]["duration_min"] if i > 0 else None
+            row.update(computeCleaningHistory(run, progsummarydf, prev_duration))
 
             final_rows.append(row)
 
         if not final_rows:
             return None
-        
-        return pd.DataFrame(final_rows)
+        return pd.DataFrame(final_rows).iloc[1:]

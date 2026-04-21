@@ -16,6 +16,8 @@ class MQTTService:
         if rc == 0:
             logging.info("Connected to MQTT broker.")
             client.subscribe(TRIGGER_TOPIC)
+        else:
+            logging.warning(f"Connection failed with code {rc}")
 
     def start(self):
         self.client.connect(BROKER, PORT, 60)
